@@ -15,11 +15,15 @@ class DataArrayWrapper(type):
                   "__setattr__", "__getattr__", "__getattribute__"]
 
     def compatible(cls, self, other):
-        """Check if other has sames shape and dims"""
-        return (
-            type(self.data_array) == type(other) and
-            self.data_array.dims == other.dims and
-            self.data_array.shape == other.shape)
+        """Check if other is a subset of self with same subshapes"""
+        if not type(other) == type(self.data_array):
+            return False
+        if not set(other.dims).issubset(set(self.data_array.dims)):
+            return False
+        subsizes = {dim: self.data_array.sizes[dim] for dim in other.dims}
+        if not other.sizes == subsizes:
+            return False
+        return True
 
     def wrap(cls, name):
         """Wrap a DataArray method to output InterpolatedDataArray if possible"""
@@ -30,7 +34,9 @@ class DataArrayWrapper(type):
             else:
                 result = getattr(self.data_array, name)
             if cls.compatible(self, result):
-                return InterpolatedDataArray(result, self.icoords)
+                icoords = {dim: self.icoords[dim] for dim in result.dims}
+                icoords = InterpolatedCoordinates(icoords)
+                return InterpolatedDataArray(result, icoords)
             else:
                 return result
         return method
@@ -55,18 +61,21 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
 
     def __getitem__(self, item):
         data_array = self.data_array[item]
-        if not isinstance(item, tuple):
-            item = (item,)
-        dct = {self.dims[k]: self.icoords[self.dims[k]][item[k]]  # TODO
-               for k in range(len(item))}
+        query = get_query(item, self.icoords.dims)
+        dct = {dim: self.icoords[dim][query[dim]]
+               for dim in query}
         icoords = InterpolatedCoordinates(dct)
         return InterpolatedDataArray(data_array, icoords)
 
-    def sel(self, item):
-        pass  # TODO
+    @property
+    def loc(self):
+        return LocIndexer(self)
 
-    def isel(self, item):
-        pass  # TODO
+    def isel(self, **kwargs):
+        return self[kwargs]
+
+    def sel(self, **kwargs):
+        return self.loc[kwargs]
 
     def __repr__(self):
         return repr(self.data_array) + "\n" + repr(self.icoords)
@@ -142,7 +151,11 @@ class InterpolatedCoordinates(dict):
 
     @property
     def dims(self):
-        return self.keys()
+        return tuple(self.keys())
+
+    @property
+    def ndim(self):
+        return len(self)
 
     def __repr__(self):
         s = "Interpolated Coordinates:\n"
@@ -151,3 +164,29 @@ class InterpolatedCoordinates(dict):
             s += f"({dim}) "
             s += repr(icoord) + "\n"
         return s
+
+    def to_index(self, item):
+        query = get_query(item, self.dims)
+        return {dim: self[dim].to_index(query[dim]) for dim in query}
+
+
+class LocIndexer:
+
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __getitem__(self, item):
+        item = self.obj.icoords.to_index(item)
+        return self.obj[item]
+
+
+def get_query(item, dims):
+    query = {dim: slice(None) for dim in dims}
+    if isinstance(item, dict):
+        query.update(item)
+    elif isinstance(item, tuple):
+        for k in range(len(item)):
+            query[dims[k]] = item[k]
+    else:
+        query[dims[0]] = item
+    return query

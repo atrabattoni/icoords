@@ -45,14 +45,26 @@ class LinearCoordinate:
         return self.get_value(self.indices())
 
     def get_index_slice(self, value_slice):
-        start = self.get_index(value_slice.start, method="after")
-        end = self.get_index(value_slice.stop, method="before")
-        stop = end + 1
+        if value_slice.start is None:
+            start = None
+        else:
+            start = self.get_index(value_slice.start, method="after")
+        if value_slice.stop is None:
+            stop = None
+        else:
+            end = self.get_index(value_slice.stop, method="before")
+            stop = end + 1
         return slice(start, stop)
 
     def slice(self, index_slice):
-        start_index = index_slice.start
-        end_index = index_slice.stop - 1
+        if index_slice.start is None:
+            start_index = self.tie_indices[0]
+        else:
+            start_index = index_slice.start
+        if index_slice.stop is None:
+            end_index = self.tie_indices[-1]
+        else:
+            end_index = index_slice.stop - 1
         start_value = self.get_value(start_index)
         end_value = self.get_value(end_index)
         mask = (start_index < self.tie_indices) & (
@@ -67,6 +79,12 @@ class LinearCoordinate:
             (start_value, end_value))
         tie_indices -= tie_indices[0]
         return LinearCoordinate(tie_indices, tie_values)
+
+    def to_index(self, item):
+        if isinstance(item, slice):
+            return self.get_index_slice(item)
+        else:
+            return self.get_index(item)
 
     def simplify(self, epsilon):
         """Remove unnecessary tie points using the Ramer-Douglas-Peucker
