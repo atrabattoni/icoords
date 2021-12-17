@@ -28,18 +28,26 @@ class DataArrayWrapper(type):
     def wrap(cls, name):
         """Wrap a DataArray method to output InterpolatedDataArray if possible"""
 
-        def method(self, *args, **kwargs):
-            if args or kwargs:
-                result = getattr(self.data_array, name)(*args, **kwargs)
-            else:
-                result = getattr(self.data_array, name)
-            if cls.compatible(self, result):
-                icoords = {dim: self.icoords[dim] for dim in result.dims}
-                icoords = InterpolatedCoordinates(icoords)
-                return InterpolatedDataArray(result, icoords)
-            else:
-                return result
-        return method
+        attr = getattr(xr.DataArray, name)
+        if callable(attr):
+            def method(self, *args, **kwargs):
+                result = attr(self.data_array, *args, **kwargs)
+                if cls.compatible(self, result):
+                    icoords = {dim: self.icoords[dim] for dim in result.dims}
+                    icoords = InterpolatedCoordinates(icoords)
+                    return InterpolatedDataArray(result, icoords)
+                else:
+                    return result
+            return method
+        elif isinstance(attr, property):
+            return property(
+                lambda self: attr.fget(self.data_array),
+                lambda self: attr.fset(self.data_array),
+                lambda self: attr.fdel(self.data_array),
+                lambda self: attr.doc(self.data_array),
+            )
+        else:
+            return None
 
     def __new__(mcs, name, bases, class_dict):
         """Create new instance with wrapped methods of the DataArray class"""
@@ -47,7 +55,9 @@ class DataArrayWrapper(type):
         names = [name for name in dir(xr.DataArray)
                  if name not in mcs.__ignore__ and name not in class_dict]
         for name in names:
-            setattr(cls, name, property(cls.wrap(name)))
+            method = cls.wrap(name)
+            if method is not None:
+                setattr(cls, name, method)
         return cls
 
 
