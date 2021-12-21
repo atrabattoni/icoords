@@ -1,4 +1,5 @@
 import re
+import types
 
 import xarray as xr
 
@@ -8,66 +9,86 @@ from .formating_html import complete_html
 
 
 class DataArrayWrapper(type):
-    """Metaclass that allows to mimic the inheritence of the DataArray class 
-    while using composition"""
 
     __ignore__ = ["__class__", "__mro__", "__new__", "__init__",
                   "__setattr__", "__getattr__", "__getattribute__"]
 
-    def compatible(cls, self, other):
-        """Check if other is a subset of self with same subshapes"""
-        if not type(other) == type(self.data_array):
-            return False
-        if not set(other.dims).issubset(set(self.data_array.dims)):
-            return False
-        subsizes = {dim: self.data_array.sizes[dim] for dim in other.dims}
-        if not other.sizes == subsizes:
-            return False
-        return True
-
-    def wrap(cls, name):
-        """Wrap a DataArray method to output InterpolatedDataArray if possible"""
-
-        attr = getattr(xr.DataArray, name)
-        if callable(attr):
-            def method(self, *args, **kwargs):
-                result = attr(self.data_array, *args, **kwargs)
-                if cls.compatible(self, result):
-                    icoords = {dim: self.icoords[dim] for dim in result.dims}
-                    icoords = InterpolatedCoordinates(icoords)
-                    return InterpolatedDataArray(result, icoords)
-                else:
-                    return result
-            return method
-        elif isinstance(attr, property):
-            return property(
-                lambda self: attr.fget(self.data_array),
-                lambda self: attr.fset(self.data_array),
-                lambda self: attr.fdel(self.data_array),
-                lambda self: attr.doc(self.data_array),
-            )
-        else:
-            return None
-
     def __new__(mcs, name, bases, class_dict):
-        """Create new instance with wrapped methods of the DataArray class"""
         cls = super().__new__(mcs, name, bases, class_dict)
         names = [name for name in dir(xr.DataArray)
                  if name not in mcs.__ignore__ and name not in class_dict]
         for name in names:
-            method = cls.wrap(name)
-            if method is not None:
-                setattr(cls, name, method)
+            setattr(cls, name, cls.wrap_attribute(name))
         return cls
+
+    def wrap_attribute(cls, name):
+        def fget(self):
+            attr = getattr(self.data_array, name)
+            if isinstance(attr, types.MethodType):
+                return cls.wrap_method(self, attr)
+            else:
+                return attr
+
+        def fset(self, value):
+            return setattr(self.data_array, name, value)
+
+        def fdel(self):
+            return delattr(self.data_array, name)
+
+        doc = getattr(xr.DataArray, name).__doc__
+        return property(fget, fset, fdel, doc)
+
+    def wrap_method(cls, self, attr):
+        def method(*args, **kwargs):
+            args = cls.wrap_arguments(self, args)
+            result = attr(*args, **kwargs)
+            return cls.wrap_result(self, result)
+        return method
+
+    def wrap_arguments(cls, self, args):
+        wrapped_args = []
+        for arg in args:
+            if type(arg) is type(self):
+                wrapped_args.append(arg.data_array)
+            else:
+                wrapped_args.append(arg)
+        return wrapped_args
+
+    def wrap_result(cls, self, result):
+        if compatible(self.data_array, result):
+            icoords = adapt_icoords(result, self.icoords)
+            return cls(result, icoords)
+        else:
+            return result
+
+
+def compatible(data_array, other):
+    """Check if other is a subset of self with same subshapes"""
+    if not type(other) == type(data_array):
+        return False
+    if not set(other.dims).issubset(set(data_array.dims)):
+        return False
+    subsizes = {dim: data_array.sizes[dim] for dim in other.dims}
+    if not other.sizes == subsizes:
+        return False
+    return True
+
+
+def adapt_icoords(data_array, icoords):
+    icoords = {dim: icoords[dim] for dim in data_array.dims}
+    return InterpolatedCoordinates(icoords)
 
 
 class InterpolatedDataArray(metaclass=DataArrayWrapper):
-    """Composition of the DataArray and the InterpolatedCoordinates classes 
-    that redirects method calls to the DataArray object by default"""
 
     def __init__(self, data_array, icoords):
         self.data_array = data_array
         self.icoords = icoords
+
+    def __array_ufunc__(self, *args, **kwargs):
+        args = InterpolatedDataArray.wrap_arguments(self, args)
+        result = self.data_array.__array_ufunc__(*args, **kwargs)
+        return InterpolatedDataArray.wrap_result(self, result)
 
     def __getitem__(self, item):
         data_array = self.data_array[item]
