@@ -118,6 +118,19 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         html = self.data_array._repr_html_()
         return complete_html(html, self.icoords)
 
+    def load_icoords(self):
+        """Interpolate coordinates and load them into memory"""
+        for dim in self.dims:
+            self.data_array.coords[dim] = (
+                self.icoords[dim].values())
+        return self.data_array
+
+    def load(self, **kwargs):
+        return self.load_icoords().load(**kwargs)
+
+    def compute(self, **kwargs):
+        return self.load_icoords().compute(**kwargs)
+
     @classmethod
     def from_netcdf(cls, *args, **kwargs):
         """Read a netCDF file following the CF conventions about interpolated 
@@ -167,13 +180,6 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         data_arrays.append(data_array)
         dataset = xr.Dataset({xarr.name: xarr for xarr in data_arrays})
         dataset.to_netcdf(*args, **kwargs)
-
-    def load_icoords(self):
-        """Interpolate coordinates and load them into memory"""
-        for dim in self.dims:
-            self.data_array.coords[dim] = (
-                self.icoords[dim].values())
-        return self.data_array
 
 
 class InterpolatedCoordinates(dict):
