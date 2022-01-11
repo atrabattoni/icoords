@@ -63,7 +63,6 @@ class DataArrayWrapper(type):
 
 
 def compatible(data_array, other):
-    """Check if other is a subset of self with same subshapes"""
     if not type(other) == type(data_array):
         return False
     if not set(other.dims).issubset(set(data_array.dims)):
@@ -119,7 +118,6 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         return complete_html(html, self.icoords)
 
     def load_icoords(self):
-        """Interpolate coordinates and load them into memory"""
         for dim in self.dims:
             self.data_array.coords[dim] = (
                 self.icoords[dim].values())
@@ -133,8 +131,6 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
 
     @classmethod
     def from_netcdf(cls, *args, **kwargs):
-        """Read a netCDF file following the CF conventions about interpolated 
-        coordinates"""
         dataset = xr.open_dataset(*args, **kwargs)
         data_array = [var for var in dataset.values()
                       if "coordinate_interpolation" in var.attrs]
@@ -151,8 +147,6 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         return cls(data_array, icoords)
 
     def to_netcdf(self, *args, **kwargs):
-        """Write a netCDF file using the CF conventions about interpolated
-         coordinates"""
         data_arrays = []
         mapping = ""
         for dim in self.icoords.dims:
@@ -183,8 +177,6 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
 
 
 class InterpolatedCoordinates(dict):
-    """Subclass of dict that contains interpolated coordinates for each 
-    dimension"""
 
     @property
     def dims(self):

@@ -2,7 +2,6 @@ import numpy as np
 
 
 class LinearCoordinate:
-    """Piecewise linear coordinate"""
 
     def __init__(self, tie_indices, tie_values):
         self.tie_indices = np.asarray(tie_indices)
@@ -87,14 +86,11 @@ class LinearCoordinate:
             return self.get_index(item)
 
     def simplify(self, epsilon):
-        """Remove unnecessary tie points using the Ramer-Douglas-Peucker
-        algorithm"""
         self.tie_indices, self.tie_values = _simplify(
             self.tie_indices, self.tie_values, epsilon)
 
 
 class ScaleOffset:
-    """Scale-offset transform to ensure the interpolation of datetime data"""
 
     def __init__(self, scale, offset):
         self.scale = scale
@@ -120,7 +116,6 @@ class ScaleOffset:
 
 
 def _linear_interpolate(x, xp, fp):
-    """Wrapping of numpy interp function to ensure datetime interpolation"""
     if not _is_strictly_increasing(xp):
         raise ValueError("xp must be strictly increasing")
     x_transform = ScaleOffset.floatize(xp)
@@ -141,7 +136,6 @@ def _is_strictly_increasing(x):
 
 
 def _simplify(x, y, epsilon):
-    """Ramer-Douglas-Peucker algorithm"""
     mask = np.ones(len(x), dtype=bool)
     stack = [(0, len(x))]
     while stack:
