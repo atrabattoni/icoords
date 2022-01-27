@@ -1,6 +1,8 @@
 import re
 import types
+from pathlib import Path
 
+import numpy as np
 import xarray as xr
 
 from icoords.interpolate import LinearCoordinate
@@ -174,6 +176,32 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         data_arrays.append(data_array)
         dataset = xr.Dataset({xarr.name: xarr for xarr in data_arrays})
         dataset.to_netcdf(*args, **kwargs)
+
+    @classmethod
+    def from_mfnetcdf(cls, fnames, dim, *args, **kwargs):
+        paths = sorted(Path(".").glob(fnames))
+        ixarrs = [cls.from_netcdf(path, *args, **kwargs) for path in paths]
+        return cls.combine(ixarrs, dim)
+
+    @classmethod
+    def combine(cls, ixarrs, dim):
+        ixarrs.sort(key=lambda ixarr: ixarr.icoords[dim].tie_values[0])
+        index = 0
+        tie_indices = np.array([], dtype="int")
+        tie_values = np.array([], dtype="datetime64[us]")
+        for ixarr in ixarrs:
+            icoord = ixarr.icoords[dim]
+            tie_values = np.append(tie_values, icoord.tie_values)
+            tie_indices = np.append(tie_indices, icoord.tie_indices + index)
+            index = tie_indices[-1] + 1
+        icoord = LinearCoordinate(tie_indices, tie_values)
+        zero = tie_values[0] - tie_values[0]  # ensure good dtype
+        icoord.simplify(epsilon=zero)
+        icoords = InterpolatedCoordinates(
+            time=icoord, offset=ixarr.icoords["offset"])
+        data_array = xr.concat(
+            [ixarr.data_array for ixarr in ixarrs], dim=dim)
+        return InterpolatedDataArray(data_array, icoords)
 
 
 class InterpolatedCoordinates(dict):
