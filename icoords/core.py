@@ -92,12 +92,18 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         return InterpolatedDataArray.wrap_result(self, result)
 
     def __getitem__(self, item):
-        data_array = self.data_array[item]
-        query = get_query(item, self.icoords.dims)
-        dct = {dim: self.icoords[dim][query[dim]]
-               for dim in query}
-        icoords = InterpolatedCoordinates(dct)
-        return InterpolatedDataArray(data_array, icoords)
+        if isinstance(item, str):
+            if item in self.icoords:
+                return self.icoords[item]
+            else:
+                return self.data_array[item]
+        else:
+            data_array = self.data_array[item]
+            query = get_query(item, self.icoords.dims)
+            dct = {dim: self.icoords[dim][query[dim]]
+                   for dim in query}
+            icoords = InterpolatedCoordinates(dct)
+            return InterpolatedDataArray(data_array, icoords)
 
     @property
     def loc(self):
