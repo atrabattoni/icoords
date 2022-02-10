@@ -126,6 +126,7 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         return complete_html(html, self.icoords)
 
     def load_icoords(self):
+        self = self.copy()
         for dim in self.dims:
             self.data_array.coords[dim] = (
                 self.icoords[dim].values())
