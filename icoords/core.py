@@ -181,7 +181,9 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
         data_array = self.data_array.copy(deep=False)
         data_array.attrs["coordinate_interpolation"] = mapping
         data_arrays.append(data_array)
-        dataset = xr.Dataset({xarr.name: xarr for xarr in data_arrays})
+        dataset = xr.Dataset(
+            data_vars={xarr.name: xarr for xarr in data_arrays},
+            attrs={"Conventions": "CF-1.9"})
         dataset.to_netcdf(*args, **kwargs)
 
     @classmethod
