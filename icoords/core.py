@@ -1,6 +1,6 @@
 import re
 import types
-from pathlib import Path
+from glob import glob
 
 import numpy as np
 import xarray as xr
@@ -188,7 +188,7 @@ class InterpolatedDataArray(metaclass=DataArrayWrapper):
 
     @classmethod
     def from_mfnetcdf(cls, fnames, dim, *args, **kwargs):
-        paths = sorted(Path(".").glob(fnames))
+        paths = sorted(glob(fnames))
         ixarrs = [cls.from_netcdf(path, *args, **kwargs) for path in paths]
         return cls.combine(ixarrs, dim)
 
